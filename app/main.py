@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,10 +23,18 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# Get allowed origins from environment variable
+# Default to localhost for development, but use env var in production
+cors_origins_str = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000"
+)
+allowed_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # React dev server
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,10 +43,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
-    """Initialize database tables on startup."""
-    # For early development we let SQLAlchemy create tables from models.
-    # In production, Alembic migrations should be the source of truth.
-    Base.metadata.create_all(bind=engine)
+    """Application startup event."""
+    # Database schema is managed by Alembic migrations.
+    # Run migrations manually: `alembic upgrade head`
+    # Or configure migrations to run automatically in CI/CD pipeline.
+    # Do not use Base.metadata.create_all() in production.
+    pass
 
 
 @app.get("/health")

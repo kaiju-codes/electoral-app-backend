@@ -17,10 +17,16 @@ class Settings(BaseModel):
         "postgresql+psycopg2://postgres:postgres@localhost:5432/electoral_roll",
     )
 
+    # Encryption
+    api_key_encryption_secret: str = os.getenv(
+        "API_KEY_ENCRYPTION_SECRET",
+        "default-dev-secret-change-in-production",
+    )
+
     # Gemini / Google GenAI
     gemini_api_key: str | None = os.getenv("GEMINI_API_KEY")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
-    gemini_max_pages_per_call: int = int(os.getenv("GEMINI_MAX_PAGES_PER_CALL", "10"))
+    gemini_max_pages_per_call: int = int(os.getenv("GEMINI_MAX_PAGES_PER_CALL", "8"))
 
     electoral_roll_prompt_version: str = os.getenv(
         "ELECTORAL_ROLL_PROMPT_VERSION", "v1"
