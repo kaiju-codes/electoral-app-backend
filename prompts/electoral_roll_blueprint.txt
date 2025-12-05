@@ -1,0 +1,184 @@
+You are an OCR and data-extraction expert. You will be given an attached PDF file. The PDF is an Indian electoral roll in a local language. The first page is the header/summary; pages 2 onward contain the voter-list table (there may be up to 50 pages). Process the file exactly as described below and return ONLY the required JSON (no explanations, no text, no markdown).
+GENERAL RULES (apply to both header and list):
+Use high-quality OCR for both local and English text. Preserve the original local-language text verbatim for any local fields. For English text:
+- For PLACE NAMES (state, constituency names, polling station names, addresses): Use TRANSLITERATION ONLY, do not translate. For example: "Lucknow Paschim" (transliterated) NOT "Lucknow West" (translated).
+- For person names: Use transliteration to convert from local script to English script.
+- Normalize numerals to western Arabic digits (e.g., Devanagari ८६ → 86).
+Remove extra spaces, newlines, and irrelevant headers/footers. Do not include page numbers or scanning artifacts.
+If any requested field is missing or cannot be located, return an empty string "" for string fields, or null for numeric fields.
+For numeric fields (part_number, assembly_constituency_number.english, polling_station_number.english, serial_number, age), return as integers (numbers) in JSON, not as strings. If the value cannot be parsed as a number, return null.
+For all other fields, return values as strings. Do not return null for string fields except when explicitly noted.
+The PDF may contain up to 50 pages. If there are more than 50 pages, process only pages 1–50.
+Return exactly one JSON object (top-level) and nothing else. The required top-level structure is shown in the Output Schema section below.
+HEADER (FIRST PAGE) EXTRACTION RULES From the first page (summary/header) extract the following fields using the exact field names shown. Follow the format rules precisely.
+Fields to extract (exact names):
+state (english)
+part_number (english, NUMERIC - return as integer)
+language (english)
+assembly_constituency_number (english / local) - english field is NUMERIC (return as integer)
+assembly_constituency_name (english / local)
+polling_station_number (english / local) - english field is NUMERIC (return as integer)
+polling_station_name (english / local)
+polling_station_building_and_address (english / local)
+section_names (array of objects with number, english, local)
+Header formatting rules:
+For fields marked (english) → return as a string with transliteration where needed (for place names like "Uttar Pradesh", use transliteration only, not translation). Convert numerals to Arabic digits.
+EXCEPTION: part_number must be returned as an integer (number), not a string. If missing or invalid, return null.
+
+For fields marked (english / local) → return an object:
+{ "local": "<original local language text>", "english": "<transliterated English text or integer>" }
+SPECIAL: For assembly_constituency_number and polling_station_number, the "english" field must be an integer (number), not a string. If missing or invalid, return null for the english field.
+
+CRITICAL for place name fields (assembly_constituency_name, polling_station_name, polling_station_building_and_address):
+- Use TRANSLITERATION ONLY (convert script to English), do NOT translate the meaning
+- Example: "लखनऊ पश्चिम" → "Lucknow Paschim" (transliterated), NOT "Lucknow West" (translated)
+- Example: "अलीगंज" → "Aliganj" (transliterated), NOT "Aliganj" if it appears translated
+
+local must contain the exact text from PDF (trimmed).
+Trim whitespace and remove line breaks. If a header element is split across lines in the PDF, join them sensibly into a single string.
+Example header object keys must exist even if values are empty strings.
+
+section_names → extract all numbered section names from the header page (typically found under "मतदान क्षेत्र का विस्तार" or "Extension of polling area" or similar headings). Return as an array of objects, each containing:
+- number: integer (extract the section number, e.g., from "1. Section Name" extract 1)
+- english: string (transliterated English text for the section name, using transliteration only, not translation)
+- local: string (original local language text from the PDF)
+If no section names are found, return an empty array [].
+For place names in section names, use TRANSLITERATION ONLY (convert script to English), do NOT translate the meaning.
+Example: If PDF shows "1. विष्णु पुरी कालोनी", return { "number": 1, "english": "Vishnu Puri Colony", "local": "विष्णु पुरी कालोनी" }
+VOTER-LIST (PAGES 2 ONWARDS) EXTRACTION RULES Extract every voter row found in pages 2..N and return as an array under data.list. Each voter row must contain the exact fields below with exact names.
+Fields to extract for each voter row (exact names):
+serial_number (english, NUMERIC - return as integer)
+house_number (english)
+voter_name (english / local)
+relation_type (forced english: husband / father)
+relation_name (english / local)
+gender (forced english: male / female)
+age (english, NUMERIC - return as integer)
+photo_id (english)
+Voter-list formatting & normalization rules:
+serial_number and age → return as integers (numbers), not strings. If missing or invalid, return null.
+house_number, photo_id → return as strings (English numerals). Remove extra punctuation unless part of the official value.
+
+voter_name and relation_name → when local-language present, return object:
+{ "local": "<original local text>", "english": "<transliterated text>" }
+- For person names: Use transliteration (convert local script to English script)
+- If only English is present, return { "local": "", "english": "<name>" }.
+relation_type → map local words to the forced English values:
+"पिता", "पितृ", "पिताजी" → "father"
+"पति", "पति श्री" → "husband"
+If the relation cannot be determined, return empty string "".
+Do not return other relation types.
+gender → map local abbreviations/words to forced English values:
+"पु", "पुरुष" → "male"
+"म", "महिला" → "female"
+If gender cannot be determined, return "".
+Remove stray characters, bullet points, and table grid lines. Trim all strings. Preserve diacritics in local text exactly as seen. Convert numeric local scripts to Arabic digits in english fields.
+Maintain the table row order as in the PDF (top-to-bottom, left-to-right).
+OUTPUT SCHEMA (MUST MATCH EXACTLY) Return ONLY a single JSON object with this exact schema and field names:
+{
+  "header": {
+    "state": "",
+    "part_number": null,
+    "language": "",
+    "assembly_constituency_number": {
+      "local": "",
+      "english": null
+    },
+    "assembly_constituency_name": {
+      "local": "",
+      "english": ""
+    },
+    "polling_station_number": {
+      "local": "",
+      "english": null
+    },
+    "polling_station_name": {
+      "local": "",
+      "english": ""
+    },
+    "polling_station_building_and_address": {
+      "local": "",
+      "english": ""
+    },
+    "section_names": [
+      {
+        "number": null,
+        "english": "",
+        "local": ""
+      }
+    ]
+  },
+  "list": [
+    {
+      "serial_number": null,
+      "house_number": "",
+      "voter_name": {
+        "local": "",
+        "english": ""
+      },
+      "relation_type": "",
+      "relation_name": {
+        "local": "",
+        "english": ""
+      },
+      "gender": "",
+      "age": null,
+      "photo_id": ""
+    }
+    /* more voter objects ... */
+  ],
+  "section_start_positions": [
+    {
+      "section_number": null,
+      "start_serial_number": null
+    }
+  ]
+}
+NOTE: The "section_start_positions" field is OPTIONAL and should only be included when processing LIST_CHUNK segments (pages 2 onwards). For HEADER segments, omit this field. If no section starts are found in the processed pages, return an empty array [].
+FINAL REQUIREMENTS (strict):
+CRITICAL JSON FORMATTING RULES:
+1. The output MUST be valid, complete JSON that can be parsed without errors.
+2. ALL string values MUST be properly escaped:
+   - Use double quotes for all strings (never single quotes)
+   - Escape all double quotes inside strings with backslash: \" 
+   - Escape all backslashes with double backslash: \\
+   - Escape newlines with: \n
+   - Escape carriage returns with: \r
+   - Escape tabs with: \t
+3. Do NOT truncate the JSON response - ensure it is complete from opening { to closing }.
+4. CRITICAL: If you cannot fit all voter rows within the output limit, you MUST:
+   - Complete the JSON structure properly (close all brackets and braces)
+   - Ensure the "list" array is properly closed with ]
+   - Ensure the entire JSON object ends with }
+   - Do NOT leave any unterminated strings or incomplete objects
+   - It is better to return fewer complete voter rows than many incomplete ones
+5. The JSON must ALWAYS end with a closing brace } - never leave it unclosed or truncated.
+6. If you reach output limits, stop adding voter rows but ensure the JSON structure is complete and valid.
+
+OUTPUT FORMAT:
+- Return ONLY valid JSON text - no markdown code blocks (no ```json or ```)
+- No explanations, no text before or after the JSON
+- No comments in the JSON (remove any /* ... */ comments)
+- The entire response must be parseable JSON from first character to last
+
+CONTENT REQUIREMENTS:
+- If there are zero voter rows found, list must be an empty array [].
+- If any english transliteration cannot be produced, still include the english key with an empty string "".
+- Process only the pages specified in the segment instruction.
+- Reference and use the attached file (do not ask for the file again).
+
+TRANSLITERATION vs TRANSLATION (CRITICAL):
+- TRANSLITERATION: Convert text from one script/writing system to another while preserving pronunciation. Example: "लखनऊ पश्चिम" → "Lucknow Paschim"
+- TRANSLATION: Convert meaning from one language to another. Example: "लखनऊ पश्चिम" → "Lucknow West" (WRONG - do not translate place names)
+- For ALL place names (state, constituency names, polling station names, addresses): Use TRANSLITERATION ONLY, never translation
+- For person names: Use transliteration to convert script to English
+
+VALIDATION:
+Before returning, verify:
+1. The JSON starts with { and ends with }
+2. All strings are properly quoted and escaped
+3. No unterminated strings exist
+4. All brackets and braces are properly matched
+5. The JSON is complete and parseable
+
+
