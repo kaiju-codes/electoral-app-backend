@@ -31,6 +31,10 @@ class Settings(BaseModel):
     electoral_roll_prompt_version: str = os.getenv(
         "ELECTORAL_ROLL_PROMPT_VERSION", "v1"
     )
+    
+    # Logging
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    log_format: str | None = os.getenv("LOG_FORMAT", None)
 
 
 @lru_cache
