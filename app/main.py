@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
 from app.config import get_settings
 from app.core.logging_config import setup_logging, get_logger
-from app.db import Base, engine
+from app.db import Base, check_database_connection, engine
 
 settings = get_settings()
 
@@ -88,6 +88,17 @@ def on_startup() -> None:
     """Application startup event."""
     logger.info("Starting FastAPI application...")
     logger.info(f"Database URL configured: {settings.database_url.split('@')[-1] if '@' in settings.database_url else '***'}")
+    
+    # Check database connection - this will raise an exception and fail startup if DB is not available
+    logger.info("Checking database connection...")
+    try:
+        check_database_connection()
+        logger.info("Database connection verified successfully")
+    except ConnectionError as e:
+        logger.error(f"Database connection check failed: {str(e)}")
+        logger.error("Application startup aborted due to database connection failure")
+        raise  # Re-raise to fail the deployment
+    
     logger.info(f"Gemini Model: {settings.gemini_model}")
     logger.info(f"Gemini Max Pages Per Call: {settings.gemini_max_pages_per_call}")
     logger.info(f"Electoral Roll Prompt Version: {settings.electoral_roll_prompt_version}")

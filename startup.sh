@@ -16,13 +16,6 @@ echo "Working directory: $(pwd)"
 echo "PORT: ${PORT}"
 echo "PYTHONPATH: ${PYTHONPATH:-not set}"
 echo "Virtual environment: ${VIRTUAL_ENV:-not set}"
-if [ -d "./antenv" ]; then
-    echo "antenv directory: exists"
-elif [ -d "/home/site/wwwroot/antenv" ]; then
-    echo "antenv directory: exists at /home/site/wwwroot/antenv"
-else
-    echo "antenv directory: not found (Oryx should create it)"
-fi
 echo "============================================================"
 echo "Starting Gunicorn for FastAPI app on port ${PORT}..."
 
