@@ -67,6 +67,7 @@ jobs:
           echo 'GEMINI_MODEL=${{ vars.GEMINI_MODEL }}' >> .env
           echo 'GEMINI_MAX_PAGES_PER_CALL=${{ vars.GEMINI_MAX_PAGES_PER_CALL }}' >> .env
           echo 'ELECTORAL_ROLL_PROMPT_VERSION=${{ vars.ELECTORAL_ROLL_PROMPT_VERSION }}' >> .env 
+          echo 'CORS_ORIGINS=${{ vars.CORS_ORIGINS }}' >> .env  # Add this line to allow CORS for the frontend
 
       # Database migrations: Run Alembic migrations before deployment
       # This ensures the database schema is up-to-date with the latest migration files
