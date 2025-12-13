@@ -23,7 +23,8 @@ exec gunicorn app.main:app \
     --bind "0.0.0.0:${PORT}" \
     --workers 4 \
     --worker-class uvicorn.workers.UvicornWorker \
-    --timeout 120 \
+    --timeout 900 \
+    --keep-alive 65 \
     --access-logfile - \
     --error-logfile -
 

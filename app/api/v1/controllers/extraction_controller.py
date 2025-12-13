@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import BackgroundTasks, Depends, HTTPException
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.extraction_service import ExtractionService
@@ -56,7 +56,6 @@ class ExtractionController:
     @staticmethod
     async def retry_segment(
         segment_id: int,
-        background_tasks: BackgroundTasks,
         db: Session = Depends(get_db)
     ) -> SegmentRetryResponse:
         """Retry processing of a single failed segment."""
@@ -70,7 +69,6 @@ class ExtractionController:
     @staticmethod
     async def retry_failed_segments_for_document(
         document_id: int,
-        background_tasks: BackgroundTasks,
         db: Session = Depends(get_db)
     ) -> BulkRetryResponse:
         """Retry all failed segments for a specific document."""

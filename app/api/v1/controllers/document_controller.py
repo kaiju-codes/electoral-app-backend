@@ -1,13 +1,17 @@
 """Document controller for handling document-related API endpoints."""
 
+import asyncio
+import logging
 from typing import Optional
 
-from fastapi import BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.document_service import DocumentService
 from app.db import get_db
 from app.schemas.documents import DocumentDetail, DocumentListResponse, DocumentRead
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentController:
@@ -15,7 +19,6 @@ class DocumentController:
     
     @staticmethod
     async def upload_document(
-        background_tasks: BackgroundTasks,
         file: UploadFile = File(...),
         db: Session = Depends(get_db),
     ) -> DocumentRead:
@@ -34,14 +37,27 @@ class DocumentController:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         
-        # Process document in background
-        background_tasks.add_task(
-            service.process_document,
-            document.id,
-            contents,
-            file.filename,
-            file.content_type or "application/pdf",
-        )
+        # Process document in background using asyncio.create_task
+        # This is more reliable for long-running async operations (5-10 minutes) than BackgroundTasks
+        async def process_with_error_handling():
+            try:
+                await service.process_document(
+                    document.id,
+                    contents,
+                    file.filename,
+                    file.content_type or "application/pdf",
+                )
+                logger.info(f"Document processing completed successfully for document_id={document.id}")
+            except Exception as e:
+                logger.error(
+                    f"Document processing failed for document_id={document.id}: {type(e).__name__}: {str(e)}",
+                    exc_info=True,
+                )
+        
+        # Create task that will run independently on the event loop
+        loop = asyncio.get_event_loop()
+        task = loop.create_task(process_with_error_handling())
+        logger.info(f"Started background extraction task for document_id={document.id}")
         
         return DocumentRead.model_validate(document)
     
