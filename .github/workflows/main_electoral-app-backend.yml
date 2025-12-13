@@ -25,31 +25,12 @@ jobs:
           python-version: '3.12'
 
       # 🛠️ Local Build Section (Optional)
-      # The following section in your workflow is designed to catch build issues early on the client side, before deployment. This can be helpful for debugging and validation. However, if this step significantly increases deployment time and early detection is not critical for your workflow, you may remove this section to streamline the deployment process.
-      - name: Create and Start virtual environment and Install dependencies
-        run: |
-          python -m venv antenv
-          source antenv/bin/activate
-          pip install -r requirements.txt
-
-      # Create .env file with all required environment variables from secrets
-      - name: Create env file
-        run: |
-          touch .env
-          echo 'DATABASE_URL=${{ secrets.DATABASE_URL }}' >> .env
-          echo 'API_KEY_ENCRYPTION_SECRET=${{ secrets.API_KEY_ENCRYPTION_SECRET }}' >> .env
-          echo 'GEMINI_MODEL=${{ vars.GEMINI_MODEL }}' >> .env
-          echo 'GEMINI_MAX_PAGES_PER_CALL=${{ vars.GEMINI_MAX_PAGES_PER_CALL }}' >> .env
-          echo 'ELECTORAL_ROLL_PROMPT_VERSION=${{ vars.ELECTORAL_ROLL_PROMPT_VERSION }}' >> .env
-                
-      # By default, when you enable GitHub CI/CD integration through the Azure portal, the platform automatically sets the SCM_DO_BUILD_DURING_DEPLOYMENT application setting to true. This triggers the use of Oryx, a build engine that handles application compilation and dependency installation (e.g., pip install) directly on the platform during deployment. Hence, we exclude the antenv virtual environment directory from the deployment artifact to reduce the payload size. 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
           name: python-app
           path: |
             .
-            !antenv/
             !venv/
             !__pycache__/
             !*.pyc
@@ -88,9 +69,16 @@ jobs:
           pip install -r requirements.txt
           # Run all pending migrations to bring database schema to latest version
           alembic upgrade head
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      
+          
+      - name: Create env file
+        run: |
+          touch .env
+          echo 'DATABASE_URL=${{ secrets.DATABASE_URL }}' >> .env
+          echo 'API_KEY_ENCRYPTION_SECRET=${{ secrets.API_KEY_ENCRYPTION_SECRET }}' >> .env
+          echo 'GEMINI_MODEL=${{ vars.GEMINI_MODEL }}' >> .env
+          echo 'GEMINI_MAX_PAGES_PER_CALL=${{ vars.GEMINI_MAX_PAGES_PER_CALL }}' >> .env
+          echo 'ELECTORAL_ROLL_PROMPT_VERSION=${{ vars.ELECTORAL_ROLL_PROMPT_VERSION }}' >> .env 
+
       - name: Login to Azure
         uses: azure/login@v2
         with:

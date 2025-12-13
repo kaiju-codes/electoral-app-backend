@@ -3,14 +3,17 @@ import sys
 import time
 from typing import Callable
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.api import api_router
 from app.config import get_settings
 from app.core.logging_config import setup_logging, get_logger
-from app.db import Base, check_database_connection, engine
+from app.db import check_database_connection
 
+# Load environment variables from .env file
+load_dotenv()
 settings = get_settings()
 
 # Configure logging early, before other imports
