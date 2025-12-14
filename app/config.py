@@ -27,6 +27,7 @@ class Settings(BaseModel):
     gemini_api_key: str | None = os.getenv("GEMINI_API_KEY")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
     gemini_max_pages_per_call: int = int(os.getenv("GEMINI_MAX_PAGES_PER_CALL", "8"))
+    gemini_http_timeout_ms: int = int(os.getenv("GEMINI_HTTP_TIMEOUT_MS", "300000"))  # 5 minutes default
 
     electoral_roll_prompt_version: str = os.getenv(
         "ELECTORAL_ROLL_PROMPT_VERSION", "v1"

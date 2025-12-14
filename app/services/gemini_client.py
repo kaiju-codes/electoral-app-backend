@@ -65,8 +65,12 @@ def get_gemini_client() -> genai.Client:
             "configure GEMINI_API_KEY environment variable."
         )
     
+    # Configure HTTP timeout to prevent hanging requests
+    from google.genai import types
+    
     client = genai.Client(
         api_key=api_key,
+        http_options=types.HttpOptions(timeout=settings.gemini_http_timeout_ms),
     )
     return client
 
