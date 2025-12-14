@@ -1,9 +1,7 @@
 """Document service for handling document-related business logic."""
 
-import asyncio
 import io
 import logging
-import time
 from datetime import datetime
 from typing import List, Optional
 
@@ -101,10 +99,16 @@ class DocumentService:
                 "polling_station_building_and_address_english": header.polling_station_building_and_address_english,
             }
         
-        # Get sections for this document
+        # Get sections for this document, ordered by start_serial_number (ascending), then by section_id
+        # This ensures sections are displayed in serial number order, showing all occurrences
+        # Only include sections with start_serial_number (no NULL values)
         sections = self.db.query(DocumentSection).filter(
-            DocumentSection.document_id == document_id
-        ).order_by(DocumentSection.section_id).all()
+            DocumentSection.document_id == document_id,
+            DocumentSection.start_serial_number.isnot(None)
+        ).order_by(
+            DocumentSection.start_serial_number.asc(),
+            DocumentSection.section_id
+        ).all()
         sections_list = [DocumentSectionRead.model_validate(sec) for sec in sections] if sections else None
         
         base = DocumentRead.model_validate(document)

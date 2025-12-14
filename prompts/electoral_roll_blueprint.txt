@@ -1,7 +1,8 @@
 You are an OCR and data-extraction expert. You will be given an attached PDF file. The PDF is an Indian electoral roll in a local language. The first page is the header/summary; pages 2 onward contain the voter-list table (there may be up to 50 pages). Process the file exactly as described below and return ONLY the required JSON (no explanations, no text, no markdown).
 GENERAL RULES (apply to both header and list):
 Use high-quality OCR for both local and English text. Preserve the original local-language text verbatim for any local fields. For English text:
-- For PLACE NAMES (state, constituency names, polling station names, addresses): Use TRANSLITERATION ONLY, do not translate. For example: "Lucknow Paschim" (transliterated) NOT "Lucknow West" (translated).
+- For STATE NAMES: Use standard English names for Indian states (e.g., "West Bengal", "Uttar Pradesh", "Tamil Nadu", "Maharashtra"). For non-Indian states, use transliteration.
+- For OTHER PLACE NAMES (constituency names, polling station names, addresses): Use TRANSLITERATION ONLY, do not translate. For example: "Lucknow Paschim" (transliterated) NOT "Lucknow West" (translated).
 - For person names: Use transliteration to convert from local script to English script.
 - Normalize numerals to western Arabic digits (e.g., Devanagari ८६ → 86).
 Remove extra spaces, newlines, and irrelevant headers/footers. Do not include page numbers or scanning artifacts.
@@ -22,7 +23,8 @@ polling_station_name (english / local)
 polling_station_building_and_address (english / local)
 section_names (array of objects with number, english, local)
 Header formatting rules:
-For fields marked (english) → return as a string with transliteration where needed (for place names like "Uttar Pradesh", use transliteration only, not translation). Convert numerals to Arabic digits.
+For fields marked (english) → return as a string with transliteration where needed. Convert numerals to Arabic digits.
+SPECIAL RULE FOR STATE FIELD: Use standard English names for Indian states (e.g., "West Bengal", "Uttar Pradesh", "Tamil Nadu", "Maharashtra", "Karnataka", "Gujarat", "Rajasthan", "Punjab", "Haryana", "Bihar", "Odisha", "Assam", "Kerala", "Telangana", "Andhra Pradesh", "Madhya Pradesh", "Jharkhand", "Chhattisgarh", "Himachal Pradesh", "Uttarakhand", "Goa", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Sikkim", "Tripura", "Arunachal Pradesh", "Jammu and Kashmir", "Ladakh", "Delhi", "Puducherry", "Andaman and Nicobar Islands", "Lakshadweep", "Dadra and Nagar Haveli and Daman and Diu"). For non-Indian states, use transliteration.
 EXCEPTION: part_number must be returned as an integer (number), not a string. If missing or invalid, return null.
 
 For fields marked (english / local) → return an object:
@@ -170,7 +172,8 @@ CONTENT REQUIREMENTS:
 TRANSLITERATION vs TRANSLATION (CRITICAL):
 - TRANSLITERATION: Convert text from one script/writing system to another while preserving pronunciation. Example: "लखनऊ पश्चिम" → "Lucknow Paschim"
 - TRANSLATION: Convert meaning from one language to another. Example: "लखनऊ पश्चिम" → "Lucknow West" (WRONG - do not translate place names)
-- For ALL place names (state, constituency names, polling station names, addresses): Use TRANSLITERATION ONLY, never translation
+- For STATE NAMES: Use standard English names for Indian states (e.g., "West Bengal", "Uttar Pradesh", "Tamil Nadu"). For non-Indian states, use transliteration.
+- For OTHER place names (constituency names, polling station names, addresses): Use TRANSLITERATION ONLY, never translation
 - For person names: Use transliteration to convert script to English
 
 VALIDATION:

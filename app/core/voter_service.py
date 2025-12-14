@@ -49,14 +49,19 @@ class VoterService:
         Returns the section where start_serial_number <= voter_serial < next_section.start_serial_number.
         If no next section exists, returns the last section with start_serial_number <= voter_serial.
         Returns None if no matching section found.
+        
+        This method correctly handles multiple occurrences of the same section_id at different
+        serial number ranges (e.g., section_one at 1-50 and again at 101-110) by sorting
+        sections by start_serial_number and finding the appropriate range.
         """
         if voter_serial is None or not sections:
             return None
         
-        # Filter and sort sections by start_serial_number (ascending)
+        # Filter and sort sections by start_serial_number (ascending), then by section_id for consistency
+        # This handles multiple occurrences of the same section_id correctly
         sorted_sections = sorted(
             [s for s in sections if s.start_serial_number is not None],
-            key=lambda s: s.start_serial_number
+            key=lambda s: (s.start_serial_number, s.section_id)
         )
         
         if not sorted_sections:

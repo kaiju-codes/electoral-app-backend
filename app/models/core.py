@@ -183,7 +183,7 @@ class Voter(Base, TimestampMixin):
 class DocumentSection(Base, TimestampMixin):
     __tablename__ = "document_sections"
     __table_args__ = (
-        UniqueConstraint("document_id", "section_id", name="uq_document_section"),
+        UniqueConstraint("document_id", "section_id", "start_serial_number", name="uq_document_section_occurrence"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -192,6 +192,8 @@ class DocumentSection(Base, TimestampMixin):
     section_name_local: Mapped[str | None] = mapped_column(String(length=255), nullable=True)
     section_name_english: Mapped[str | None] = mapped_column(String(length=255), nullable=True)
     start_serial_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Note: Composite index on (document_id, start_serial_number) is created in migration
+    # Partial unique index for NULL handling is also created in migration
 
     document: Mapped[Document] = relationship(back_populates="sections")
 

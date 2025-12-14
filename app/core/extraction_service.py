@@ -253,99 +253,126 @@ class ExtractionService:
         return result
     
     def _upsert_document_sections(self, document_id: int, section_names: list[dict] | None) -> None:
-        """Upsert document sections from header JSON using merge for efficiency."""
+        """Store section names from header JSON for later use when creating sections with start_serial_number.
+        
+        Note: Sections are NOT created here. They are only created when we have start_serial_number
+        from list chunks via _update_section_start_serial_numbers.
+        This method is kept for backward compatibility but no longer creates sections.
+        """
         if not section_names or not isinstance(section_names, list):
             return
         
-        db = SessionLocal()
-        try:
-            sections_count = 0
-            for section in section_names:
-                if not isinstance(section, dict):
-                    continue
-                
-                section_id = section.get("number")
-                if section_id is None:
-                    continue
-                
-                # Check if exists to preserve start_serial_number
-                existing = db.query(DocumentSection).filter(
-                    DocumentSection.document_id == document_id,
-                    DocumentSection.section_id == section_id
-                ).first()
-                
-                if existing:
-                    # Update existing - preserve start_serial_number if not in new data
-                    existing.section_name_local = section.get("local")
-                    existing.section_name_english = section.get("english")
-                    if section.get("start_serial_number") is not None:
-                        existing.start_serial_number = section.get("start_serial_number")
-                else:
-                    # Insert new
-                    new_section = DocumentSection(
-                        document_id=document_id,
-                        section_id=section_id,
-                        section_name_local=section.get("local"),
-                        section_name_english=section.get("english"),
-                        start_serial_number=section.get("start_serial_number")
-                    )
-                    db.add(new_section)
-                sections_count += 1
-            
-            db.commit()
-            logger.info(
-                f"Document sections upserted: document_id={document_id}, sections_count={sections_count}"
-            )
-        finally:
-            db.close()
+        logger.info(
+            f"Section names from header stored (not creating sections yet): document_id={document_id}, "
+            f"section_names_count={len(section_names)}"
+        )
+        # Sections will be created later when we have start_serial_number from list chunks
     
     def _get_document_sections(self, document_id: int) -> list[DocumentSection]:
-        """Get all sections for a document, ordered by section_id."""
+        """Get all sections for a document, ordered by start_serial_number (ascending), then by section_id.
+        
+        This ordering is important for range-based section matching in voter service.
+        All sections must have a start_serial_number (no NULL values).
+        """
         db = SessionLocal()
         try:
             sections = db.query(DocumentSection).filter(
-                DocumentSection.document_id == document_id
-            ).order_by(DocumentSection.section_id).all()
+                DocumentSection.document_id == document_id,
+                DocumentSection.start_serial_number.isnot(None)
+            ).order_by(
+                DocumentSection.start_serial_number.asc(),
+                DocumentSection.section_id
+            ).all()
             return sections
         finally:
             db.close()
     
-    def _update_section_start_serial_numbers(self, document_id: int, section_start_positions: list[dict]) -> None:
-        """Update start_serial_number for sections based on section_start_positions from list chunks."""
+    def _update_section_start_serial_numbers(
+        self, document_id: int, section_start_positions: list[dict], section_names: list[dict] | None = None
+    ) -> None:
+        """Create section occurrences based on section_start_positions from list chunks.
+        
+        For each section_start_position, creates a new section occurrence if it doesn't exist
+        with that exact (document_id, section_id, start_serial_number) combination.
+        Section names are obtained from section_names (from header JSON) or from existing sections.
+        All sections must have a start_serial_number (no NULL values allowed).
+        """
         if not section_start_positions or not isinstance(section_start_positions, list):
             return
         
         db = SessionLocal()
         try:
-            # Build a map of section_id to minimum start_serial_number
-            section_start_map: dict[int, int] = {}
+            inserted_count = 0
+            skipped_count = 0
+            
+            # Build a lookup map for section names from header
+            section_names_map: dict[int, dict] = {}
+            if section_names and isinstance(section_names, list):
+                for section in section_names:
+                    if isinstance(section, dict):
+                        section_id = section.get("number")
+                        if isinstance(section_id, int):
+                            section_names_map[section_id] = {
+                                "local": section.get("local"),
+                                "english": section.get("english")
+                            }
+            
             for pos in section_start_positions:
                 section_id = pos.get("section_number")
                 start_serial = pos.get("start_serial_number")
-                if isinstance(section_id, int) and isinstance(start_serial, int):
-                    # Keep minimum start_serial_number if multiple chunks find same section
-                    if section_id not in section_start_map or start_serial < section_start_map[section_id]:
-                        section_start_map[section_id] = start_serial
-            
-            # Update sections with start_serial_number using bulk update
-            from sqlalchemy import update
-            for section_id, start_serial in section_start_map.items():
-                stmt = (
-                    update(DocumentSection)
-                    .where(
+                
+                if not isinstance(section_id, int) or not isinstance(start_serial, int):
+                    skipped_count += 1
+                    continue
+                
+                # Check if section occurrence with this exact combination exists
+                existing = db.query(DocumentSection).filter(
+                    DocumentSection.document_id == document_id,
+                    DocumentSection.section_id == section_id,
+                    DocumentSection.start_serial_number == start_serial
+                ).first()
+                
+                if existing:
+                    # Section occurrence already exists, skip
+                    skipped_count += 1
+                    continue
+                
+                # Get section name from header map or existing section
+                section_name_local = None
+                section_name_english = None
+                
+                if section_id in section_names_map:
+                    section_name_local = section_names_map[section_id].get("local")
+                    section_name_english = section_names_map[section_id].get("english")
+                else:
+                    # Fallback: get from any existing occurrence of this section_id
+                    name_section = db.query(DocumentSection).filter(
                         DocumentSection.document_id == document_id,
-                        DocumentSection.section_id == section_id,
-                        (DocumentSection.start_serial_number.is_(None)) | 
-                        (DocumentSection.start_serial_number > start_serial)
-                    )
-                    .values(start_serial_number=start_serial)
+                        DocumentSection.section_id == section_id
+                    ).first()
+                    if name_section:
+                        section_name_local = name_section.section_name_local
+                        section_name_english = name_section.section_name_english
+                
+                # Insert new section occurrence with start_serial_number
+                new_section = DocumentSection(
+                    document_id=document_id,
+                    section_id=section_id,
+                    section_name_local=section_name_local,
+                    section_name_english=section_name_english,
+                    start_serial_number=start_serial
                 )
-                db.execute(stmt)
+                db.add(new_section)
+                inserted_count += 1
+                logger.debug(
+                    f"Created section: document_id={document_id}, section_id={section_id}, "
+                    f"start_serial={start_serial}"
+                )
             
             db.commit()
             logger.info(
-                f"Section start serial numbers updated: document_id={document_id}, "
-                f"sections_updated={len(section_start_map)}"
+                f"Section start serial numbers processed: document_id={document_id}, "
+                f"sections_inserted={inserted_count}, skipped={skipped_count}"
             )
         finally:
             db.close()
@@ -512,12 +539,27 @@ class ExtractionService:
             db.close()
     
     def _process_section_start_positions(self, extraction_run_id: int) -> None:
-        """Collect and update section start serial numbers from all LIST_CHUNK segments."""
+        """Collect section start positions from all LIST_CHUNK segments and create sections.
+        
+        Also retrieves section names from the header segment to populate section names.
+        """
         db = SessionLocal()
         try:
             run = db.get(ExtractionRun, extraction_run_id)
             if not run:
                 return
+            
+            # Get section names from header segment
+            header_seg = db.query(ExtractionSegment).filter(
+                ExtractionSegment.extraction_run_id == extraction_run_id,
+                ExtractionSegment.segment_type == SegmentType.HEADER,
+                ExtractionSegment.status == SegmentStatus.DONE
+            ).first()
+            
+            section_names = None
+            if header_seg and header_seg.parsed_header_json:
+                header_json = header_seg.parsed_header_json
+                section_names = header_json.get("section_names")
             
             # Collect section_start_positions from all list chunks
             all_section_start_positions: list[dict] = []
@@ -533,9 +575,11 @@ class ExtractionService:
                 if isinstance(section_starts, list):
                     all_section_start_positions.extend(section_starts)
             
-            # Update section start_serial_numbers
+            # Create sections with start_serial_numbers
             if all_section_start_positions:
-                self._update_section_start_serial_numbers(run.document_id, all_section_start_positions)
+                self._update_section_start_serial_numbers(
+                    run.document_id, all_section_start_positions, section_names
+                )
         finally:
             db.close()
     
@@ -602,6 +646,20 @@ class ExtractionService:
                 finally:
                     db_check.close()
                 
+                # Mark segment as RUNNING before processing so UI shows progress
+                db_mark = SessionLocal()
+                try:
+                    seg = db_mark.get(ExtractionSegment, seg_id)
+                    if seg and seg.status == SegmentStatus.PENDING:
+                        seg.status = SegmentStatus.RUNNING
+                        db_mark.commit()
+                        logger.debug(
+                            f"Segment marked as RUNNING: extraction_run_id={extraction_run_id}, "
+                            f"segment_id={seg_id}"
+                        )
+                finally:
+                    db_mark.close()
+                
                 segment_process_start = time.time()
                 try:
                     parsed = await asyncio.to_thread(
@@ -641,6 +699,9 @@ class ExtractionService:
                             db.commit()
                     finally:
                         db.close()
+                    
+                    # Update run status when a segment fails
+                    self._update_extraction_run_status(extraction_run_id)
         
         # Fetch all segments for the run.
         db = SessionLocal()
@@ -778,6 +839,21 @@ class ExtractionService:
                 return
             
             segments: list[ExtractionSegment] = list(run.segments)
+            
+            # Check if any segments are still in progress (PENDING or RUNNING)
+            unfinished = any(s.status in (SegmentStatus.PENDING, SegmentStatus.RUNNING) for s in segments)
+            if unfinished:
+                # Keep run as RUNNING and don't set finished_at while segments are in progress
+                run.status = ExtractionRunStatus.RUNNING
+                run.finished_at = None
+                db.commit()
+                logger.debug(
+                    f"Extraction run kept as RUNNING: extraction_run_id={extraction_run_id}, "
+                    f"unfinished_segments={sum(1 for s in segments if s.status in (SegmentStatus.PENDING, SegmentStatus.RUNNING))}"
+                )
+                return
+            
+            # All segments are terminal (DONE, FAILED, or SKIPPED), determine final status
             any_failed = any(s.status == SegmentStatus.FAILED for s in segments)
             failed_segment_count = sum(1 for s in segments if s.status == SegmentStatus.FAILED)
             all_done = all(s.status == SegmentStatus.DONE for s in segments)
@@ -796,7 +872,7 @@ class ExtractionService:
             has_header = header_segment is not None
             has_list_data = len(list_segments_done) > 0
             
-            # Determine status
+            # Determine final status
             if all_done and has_header and has_list_data and not any_failed:
                 run.status = ExtractionRunStatus.COMPLETED
                 run.finished_at = run.finished_at or datetime.utcnow()
